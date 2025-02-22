@@ -1,85 +1,72 @@
-const express  = require("express");
+const express = require("express");
 const jwt = require("jsonwebtoken");
-const path = require("path");
-const bodyParser = require("body-parser");
-const router = express.Router();
-const staticRoutes = require('./routes/routes');
-const JWT_SECRET = "USER_APP";
 
 const app = express();
 app.use(express.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
 const users = [];
+const JWT_SECRET = "ilove100xdevsliveclasses";
 
-app.use("/", staticRoutes);
+function logger(req, res, next) {
+    console.log(`${req.method} request received`);
+    next();
+}
 
-app.post("/signup", (req, res) => {
+app.get("/", (req, res) => {
+    res.sendFile(__dirname + "/public/index.html");
+});
 
-    const {username, password} = req.body;
-    users.push({username, password});
-
-    res.send("User created successfully");
-})
-app.post("/signin", (req, res) => {
-
-    const username = req.body.username;
-    const password = req.body.password;
-    const user = users.find(user => user.username === username && user.password === password);
-    if(user){
-        const token = jwt.sign({
-            username: username
-        }, JWT_SECRET); //convert their username to jwt token
-        res.send({
-            token: token
-        });
-    }else{
-        res.status(403).send({
-            message: "Invalid username or password"
-        });
+app.post("/signup", logger, (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.json({ message: "Username and password are required." });
     }
-})
-function auth(req, res, next){
-    const token = req.headers.token;
+    if (username.length < 5) {
+        return res.json({ message: "Username must have at least 5 characters." });
+    }
+    if (users.find((user) => user.username === username)) {
+        return res.json({ message: "You are already signed up!" });
+    }
+    users.push({ username, password });
+    res.json({ message: "You have signed up successfully!" });
+});
 
-    if(token){
-        jwt.verify(token, JWT_SECRET, (err) => {
-            if(err){
-                res.status(403).send({
-                    message: "Invalid token"
-                })
-            }else{
-                next();
-            }
-        })
-    }else{
-        res.status(403).send({
-            message: "Token required"
-        })
+app.post("/signin", logger, (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.json({ message: "Username and password are required." });
+    }
+    const foundUser = users.find((user) => user.username === username && user.password === password);
+    if (foundUser) {
+        const token = jwt.sign({ username }, JWT_SECRET);
+        res.json({ token, message: "You are signed in successfully!" });
+    } else {
+        res.json({ message: "Invalid username or password!" });
+    }
+});
+
+function auth(req, res, next) {
+    const token = req.headers.authorization;
+    if (!token) {
+        return res.json({ message: "Token is missing!" });
+    }
+    try {
+        const decodedData = jwt.verify(token, JWT_SECRET);
+        req.username = decodedData.username;
+        next();
+    } catch (error) {
+        res.json({ message: "Invalid token!" });
     }
 }
-app.get("/me", auth, (req, res) => {
-    res.send({
-        message: "You are authenticated"
-    })
-})
-// app.get("/me", (req, res) => {
-//     const token = req.headers.token; // jwt token
-//     const decodedinfo = jwt.verify(token, JWT_SECRET);// {username}
 
-//     const username = decodedinfo.username;
-//     const founduser = users.find(user => user.username === username);
+app.get("/me", logger, auth, (req, res) => {
+    const currentUser = req.username;
+    const foundUser = users.find((user) => user.username === currentUser);
+    if (foundUser) {
+        res.json({ username: foundUser.username, password: foundUser.password });
+    } else {
+        res.json({ message: "User not found!" });
+    }
+});
 
-//     if(founduser){
-//         res.json({
-//             username: founduser.username,
-//             password: founduser.password
-//         })
-//     }else{
-//         res.json({
-//             message: "token invalid"
-//         })
-//     }
-// })
-
-app.listen(5000);
+app.listen(3000);
